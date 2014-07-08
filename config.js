@@ -33,9 +33,9 @@ exports.config = {
 
 		var output = 'build/ng-sharepoint.js',
 
-		    files = ['src/prefix.txt',
+		    files = ['src/_prefix.txt',
 		             'build/out.js',
-		             'src/suffix.txt'
+		             'src/_suffix.txt'
 		    ];
 
 		fs.writeFile(output, '', function () {
