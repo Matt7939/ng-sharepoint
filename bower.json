@@ -1,28 +1,33 @@
 {
-  "name": "ng-sharepoint",
-  "version": "0.0.1",
-  "authors": [
-    "Jeff McCoy",
-    "me [at] jeffm.us"
-  ],
-  "description": "AngularJS SharePoint integration service, leverage the oData REST API in your Angular app.",
-  "main": "ng-sharepoint.js",
-  "keywords": [
-    "sharepoint",
-    "odata",
-    "rest",
-    "http",
-    "listdata.svc",
-    "ajax"
-  ],
-  "license": "MIT",
-  "homepage": "https://github.com/jeff-mccoy/ng-sharepoint",
-  "private": true,
-  "ignore": [
-    "**/.*",
-    "node_modules",
-    "bower_components",
-    "test",
-    "tests"
-  ]
+	"name"        : "ng-sharepoint",
+	"version"     : "0.0.1",
+	"authors"     : [
+		"Jeff McCoy",
+		"me [at] jeffm.us"
+	],
+	"description" : "AngularJS SharePoint integration service, leverage the oData REST API in your Angular app.",
+	"main"        : "ng-sharepoint.js",
+	"keywords"    : [
+		"sharepoint",
+		"odata",
+		"rest",
+		"http",
+		"listdata.svc",
+		"ajax"
+	],
+	"license"     : "MIT",
+	"homepage"    : "https://github.com/jeff-mccoy/ng-sharepoint",
+	"private"     : true,
+	"ignore"      : [
+		"**/.*",
+		"node_modules",
+		"bower_components",
+		"test",
+		"tests"
+	],
+	"dependencies": {
+		"IndexedDBShim": "*",
+		"lodash"       : "~2.4.1",
+		"db.js"        : "~0.9.0"
+	}
 }

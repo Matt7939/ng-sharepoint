@@ -1,0 +1,12 @@
+/**
+ * Angular SharePoint
+ *
+ * An AngularJS module for interacting with Microsoft SharePoint's oData REST API
+ *
+ * (c) 2014 Jeff McCoy, http://jeffm.us
+ *
+ * License: MIT
+ */
+
+(function(window, angular, undefined) {
+
