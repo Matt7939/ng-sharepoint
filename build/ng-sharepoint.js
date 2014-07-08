@@ -27,7 +27,7 @@ CONST = {
 };
 
 _config = _.defaults(
-	// Load the SP_CONFIG file if it exists
+	// Load the SP_CONFIG variable if it exists
 		SP_CONFIG || {},
 
 		{
@@ -47,7 +47,7 @@ _config = _.defaults(
 			'noCache'     : !db || false,
 
 			// User-defined value.  Changing this will force all users to flush/re-validate all caches, useful for schema changes
-			'cacheVersion': 2
+			'cacheVersion': 1
 		});
 
 // If caching is enabled/available set it up
@@ -184,42 +184,6 @@ _utils = {
 	}
 
 };
-
-/*global angular, db, _, PRODUCTION, FTSS */
-
-
-angular
-
-	.module('ngSharePoint', [])
-
-	.factory(
-	'SharePoint',
-
-	['$http',
-	 
-	 'SP_CONFIG',
-
-	 function ($http, SP_CONFIG) {
-
-		 var _utils = {},
-
-		     _debounce = {},
-
-		     CONST = {
-
-			     'EPOCH_OFFSET': 1388552400,
-
-			     'FIELD_JSON_TRAIL': '_JSON',
-
-			     'ODATA_VERSION': '2.0'
-
-		     };
-
-
-		 return api;
-
-	 }
-	]);
 
 function main($http, SP_CONFIG) {
 

@@ -15,7 +15,7 @@ CONST = {
 };
 
 _config = _.defaults(
-	// Load the SP_CONFIG file if it exists
+	// Load the SP_CONFIG variable if it exists
 		SP_CONFIG || {},
 
 		{
@@ -35,7 +35,7 @@ _config = _.defaults(
 			'noCache'     : !db || false,
 
 			// User-defined value.  Changing this will force all users to flush/re-validate all caches, useful for schema changes
-			'cacheVersion': 2
+			'cacheVersion': 1
 		});
 
 // If caching is enabled/available set it up
