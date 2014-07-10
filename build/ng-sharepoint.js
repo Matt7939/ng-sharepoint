@@ -14,83 +14,15 @@
 
 var _cache, _config, _utils, _debounce, CONST;
 
+// When caching is enabled, this variable stores references to queries to limit how fast a call can occur
 _debounce = {};
 
-CONST = {
-
-	'EPOCH_OFFSET': 1388552400,
-
-	'FIELD_JSON_TRAIL': '_JSON',
-
-	'ODATA_VERSION': '2.0'
-
-};
-
-_config = _.defaults(
-	// Load the SP_CONFIG variable if it exists
-		SP_CONFIG || {},
-
-		{
-			// The URL for ListData.svc, default: /_vti_bin/ListData.svc
-			'baseURL'     : '/_vti_bin/ListData.svc/',
-
-			// The URL for loading user data, default: /_layouts/userdisp.aspx?Force=True
-			'userURL'     : '/_layouts/userdisp.aspx?Force=True',
-
-			// The URL for loading SP users, default: /_vti_bin/ListData.svc/UserInformationList
-			'pplURL'      : '/_vti_bin/ListData.svc/UserInformationList',
-
-			// Enable offline mode, doesn't check for changes if data is already cached
-			'offline'     : false,
-
-			// Override all caching options (automatic if db isn't loaded)
-			'noCache'     : !db || false,
-
-			// User-defined value.  Changing this will force all users to flush/re-validate all caches, useful for schema changes
-			'cacheVersion': 1
-		});
-
-// If caching is enabled/available set it up
-if (!_config.noCache) {
-
-	// Array to hold our callbacks while the cache DB is still loading, this will change to the cacheDB after init
-	_cache = [];
-
-	db
-
-		// Initialize the service
-		.open(
-		{
-			'server' : 'angularSharePoint',
-			'version': 1,
-			'schema' : {
-				'caches': {
-					'keyPath': 'q'
-				}
-			}
-		})
-
-		// Once the DB is loaded, try to run any cached callbacks and setup the cacheDB reference
-		.done(function (instance) {
-
-			      // Clone the _cache array to runners[]
-			      var runners = _cache.slice(0);
-
-			      // Remap _cache to instance (now acts as the cacheDB)
-			      _cache = instance;
-
-			      // Run all the callbacks async
-			      while (runners.length) {
-
-				      // Use shift() to reduce the array and pass a callback
-				      setTimeout(runners.shift(), 25);
-
-			      }
-
-		      });
-
-}
-
+/** Define the ngSharePoint module and SharePoint service
+ *
+ * An optional SP_CONFIG variable can be set to pass configuration options to the service:
+ *
+ *
+ */
 angular
 
 	.module('ngSharePoint', [])
@@ -99,7 +31,16 @@ angular
 
              ['$http',
               'SP_CONFIG',
-              main
+
+              function ($http, SP_CONFIG) {
+
+	              configuration(SP_CONFIG);
+
+	              cache();
+
+	              return main.apply(this, arguments);
+
+              }
              ]);
 
 /*global _utils, angular */
@@ -185,7 +126,92 @@ _utils = {
 
 };
 
-function main($http, SP_CONFIG) {
+function cache() {
+
+	// If caching is enabled/available set it up
+	if (!_config.noCache) {
+
+		// Array to hold our callbacks while the cache DB is still loading, this will change to the cacheDB after init
+		_cache = [];
+
+		db
+
+			// Initialize the service
+			.open(
+			{
+				'server' : 'angularSharePoint',
+				'version': 1,
+				'schema' : {
+					'caches': {
+						'keyPath': 'q'
+					}
+				}
+			})
+
+			// Once the DB is loaded, try to run any cached callbacks and setup the cacheDB reference
+			.done(function (instance) {
+
+				      // Clone the _cache array to runners[]
+				      var runners = _cache.slice(0);
+
+				      // Remap _cache to instance (now acts as the cacheDB)
+				      _cache = instance;
+
+				      // Run all the callbacks async
+				      while (runners.length) {
+
+					      // Use shift() to reduce the array and pass a callback
+					      setTimeout(runners.shift(), 25);
+
+				      }
+
+			      });
+
+	}
+
+}
+;function configuration(SP_CONFIG) {
+
+	// Constants for the service
+	CONST = {
+
+		// For caching, this is the initial timing offset (1 Jan 2014).  SP gives intermitten 500 errors if you use EPOCH
+		'EPOCH_OFFSET'    : 1388552400,
+
+		// The field name suffix for any JSON fields that will be automatically encoded/decoded by ng-sharepoint
+		'FIELD_JSON_TRAIL': '_JSON',
+
+		// For SP 2010 use 2.0 for 2013 it's 3.0.  This was added due to random 500 errors from a SP farm when this header wasn't sent (this is NOT required by the oData Spec)!
+		'ODATA_VERSION'   : '2.0'
+
+	};
+
+	_config = _.defaults(
+		// Load the SP_CONFIG variable if it exists
+			SP_CONFIG || {},
+
+			{
+				// The URL for ListData.svc, default: /_vti_bin/ListData.svc
+				'baseURL'     : '/_vti_bin/ListData.svc/',
+
+				// The URL for loading user data, default: /_layouts/userdisp.aspx?Force=True
+				'userURL'     : '/_layouts/userdisp.aspx?Force=True',
+
+				// The URL for loading SP users, default: /_vti_bin/ListData.svc/UserInformationList
+				'pplURL'      : '/_vti_bin/ListData.svc/UserInformationList',
+
+				// Enable offline mode, doesn't check for changes if data is already cached
+				'offline'     : false,
+
+				// Override all caching options (automatic if db isn't loaded)
+				'noCache'     : !db || false,
+
+				// User-defined value.  Changing this will force all users to flush/re-validate all caches, useful for schema changes
+				'cacheVersion': 1
+			});
+
+}
+;function main($http, SP_CONFIG) {
 
 	return {
 
