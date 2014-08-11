@@ -72,6 +72,8 @@ function main($http, SP_CONFIG) {
 		 * Performs a page-scrape to find relevant user data (this is required for SP 2010 as the _api features aren't
 		 * available).
 		 *
+		 * @todo This needs a lot more testing to verify the viability of the page-scrape across multiple platforms
+		 *
 		 * @param scope
 		 * @param sBind
 		 *
@@ -81,16 +83,13 @@ function main($http, SP_CONFIG) {
 
 			var scopeBinding = sBind || 'user',
 
-			    data = localStorage.getItem('SP_REST_USER'),
+			    data = localStorage.getItem('NG_SHAREPOINT_REST_USER_DATA'),
 
 			    cacheDays = _config.user.cache * CONST.JS_DAY;
 
-
 			if (data && initStamp - data.updated < cacheDays) {
 
-				data = JSON.parse(data);
-
-				scope[scopeBinding] = data;
+				scope[scopeBinding] = JSON.parse(data);
 
 			} else {
 
@@ -103,16 +102,15 @@ function main($http, SP_CONFIG) {
 
 					.then(function (response) {
 
-						      var data, html;
-
 						      data = {
 							      'id'     : parseInt(response.data.match(/_spuserid=(\d+);/i)[1], 10),
-							      'updated': new Date().getTime()
+							      'updated': initStamp
 						      };
 
-						      html = $(response.data.replace(/[ ]src=/g, ' data-src='));
+						      $(response.data.replace(/[ ]src=/g, ' data-src='))
 
-						      html.find('#SPFieldText')
+							      .find('#SPFieldText')
+
 							      .each(function () {
 
 								            var field1, field2;
@@ -124,7 +122,7 @@ function main($http, SP_CONFIG) {
 
 							            });
 
-						      localStorage.SP_REST_USER = JSON.stringify(data);
+						      localStorage.NG_SHAREPOINT_REST_USER_DATA = JSON.stringify(data);
 
 						      scope[scopeBinding] = data;
 
@@ -134,6 +132,14 @@ function main($http, SP_CONFIG) {
 
 		},
 
+		/**
+		 * Execute SQL transaction
+		 *
+		 * Perform chained sequence of operations
+		 *
+		 * @param collection
+		 * @returns {*}
+		 */
 		'batch': function (collection) {
 
 			var map = [],
@@ -275,7 +281,7 @@ function main($http, SP_CONFIG) {
 		},
 
 		/**
-		 * Create action
+		 * Create data
 		 *
 		 * Performs a CREATE with the given scope variable, The scope
 		 *
@@ -290,11 +296,18 @@ function main($http, SP_CONFIG) {
 					'url'    : _config.baseURL + (scope.__metadata.uri || scope.__metadata),
 					'headers': {
 						'DataServiceVersion': CONST.ODATA_VERSION
-					}
+					},
+					'data'   : _utils.beforeSend(scope)
 				});
 
 		},
 
+		/**
+		 * Updated data
+		 *
+		 * @param scope
+		 * @returns {*}
+		 */
 		'update': function (scope) {
 
 			return $http(
@@ -311,6 +324,12 @@ function main($http, SP_CONFIG) {
 
 		},
 
+		/**
+		 * Read Data
+		 *
+		 * @param optOriginal
+		 * @returns {*|Promise}
+		 */
 		'read': function (optOriginal) {
 
 			var getData, getCache, options;
@@ -348,10 +367,10 @@ function main($http, SP_CONFIG) {
 						'dataType': 'json',
 						'method'  : 'GET',
 						'url'     : _config.baseURL + opt.source,
-						'params'  : opt.params || null,
 						'headers' : {
 							'DataServiceVersion': CONST.ODATA_VERSION
-						}
+						},
+						'params'  : opt.params || null
 					})
 
 					.then(function (response) {
@@ -566,4 +585,3 @@ function main($http, SP_CONFIG) {
 	}
 
 }
-;
