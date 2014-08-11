@@ -287,8 +287,7 @@ function main($http, SP_CONFIG) {
 			return $http(
 				{
 					'method' : 'POST',
-					'url'    : _config.baseURL + scope.__metadata,
-					'data'   : _utils.beforeSend(scope),
+					'url'    : _config.baseURL + (scope.__metadata.uri || scope.__metadata),
 					'headers': {
 						'DataServiceVersion': CONST.ODATA_VERSION
 					}
