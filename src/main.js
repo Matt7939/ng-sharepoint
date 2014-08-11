@@ -1,123 +1,136 @@
 function main($http, SP_CONFIG) {
 
+	// This is the cache of our people queries
+	var _cachePeople = {},
+
+	    // The initial timestamp
+	    initStamp = new Date().getTime();
+
 	return {
 
 		/**
+		 * UserInformationList lookup
 		 *
+		 * This function performs a people lookup function that includes result caching and a filtering function.
+		 *
+		 * @param {String} search - The terms to query SharePoint by (using startswith function).
+		 * @param {Function} [filter] - An optional filter function to apply to the result set.
+		 *
+		 * @returns {Array} The array of filtered people found.
 		 */
-		'people': (function () {
+		'people': function (search, filter) {
 
-			// This is the cache of our people queries
-			var _cachePeople = {};
+			// Call the filter independently because it may be change while the SP data shouldn't
+			var execFilter = function (data) {
 
-			return function (search, filter) {
+				return filter ? _.filter(data, function (d) {
 
-				// Call the filter independently because it may be change while the SP data shouldn't
-				var execFilter = function (data) {
+					return filter(d);
 
-					return filter ? _.filter(data, function (d) {
-
-						return filter(d);
-
-					}) : data;
-
-				};
-
-				// If we've already done this search during the app's lifecycle, return it instead
-				if (_cachePeople[search]) {
-
-					return {
-						'then': function (callback) {
-							callback(execFilter(_cachePeople[search]));
-						}
-					};
-
-				}
-
-				// No cache existed so make the SP query
-				return $http(
-					{
-						'dataType': 'json',
-						'method'  : 'GET',
-						'cache'   : true,
-						'url'     : _config.pplURL,
-						'params'  : {
-							'$select': 'Name,WorkEMail',
-							'$filter': "startswith(WorkEMail,'" + search + "')",
-							'$top'   : 10
-						}
-					})
-
-					// Now convert to an array, store a copy in the cache and return results of execFilter()
-					.then(function (response) {
-
-						      var data = _cachePeople[search] = _.toArray(response.data.d);
-						      return execFilter(data);
-
-					      });
+				}) : data;
 
 			};
 
-		}()),
-		'user'  : function (scope, sField) {
+			// If we've already done this search during the app's lifecycle, return it instead
+			if (_config.peopleLookup.cache && _cachePeople[search]) {
 
-			var scopeField = sField || 'user';
-
-			try {
-
-				var data = localStorage.getItem('SP_REST_USER');
-
-				if (data) {
-
-					data = JSON.parse(data);
-
-					if (new Date().getTime() - data.updated < 2592000000) {
-
-						scope[scopeField] = data;
-						return;
-
+				return {
+					'then': function (callback) {
+						callback(execFilter(_cachePeople[search]));
 					}
+				};
 
-				}
-
-			} catch (e) {
 			}
 
+			// No cache existed so make the SP query
 			return $http(
 				{
-					'method': 'GET',
-					'cache' : true,
-					'url'   : _config.userURL
+					'dataType': 'json',
+					'method'  : 'GET',
+					'cache'   : _config.peopleLookup.cache,
+					'url'     : _config.pplURL,
+					'params'  : {
+						'$select': _config.peopleLookup.fields.toString(),
+						'$filter': "startswith(" + _config.peopleLookup.searchField + ",'" + search + "')",
+						'$top'   : _config.peopleLookup.limit
+					}
 				})
 
+				// Now convert to an array, store a copy in the cache and return results of execFilter()
 				.then(function (response) {
 
-					      var data, html;
-
-					      data = {
-						      'id'     : parseInt(response.data.match(/_spuserid=(\d+);/i)[1], 10),
-						      'updated': new Date().getTime()
-					      };
-
-					      html = $(response.data.replace(/[ ]src=/g, ' data-src='));
-
-					      html.find('#SPFieldText')
-						      .each(function () {
-
-							            var field1, field2;
-
-							            field1 = this.innerHTML.match(/FieldName\=\"(.*)\"/i)[1];
-							            field2 = this.innerHTML.match(/FieldInternalName\=\"(.*)\"/i)[1];
-
-							            data[field1] = data[field2] = this.innerText.trim();
-
-						            });
-
-					      localStorage.SP_REST_USER = JSON.stringify(data);
-
-					      scope[scopeField] = data;
+					      var data = _cachePeople[search] = _.toArray(response.data.d);
+					      return execFilter(data);
 
 				      });
+
+		},
+
+		/**
+		 * Current user data parser
+		 *
+		 * Performs a page-scrape to find relevant user data (this is required for SP 2010 as the _api features aren't
+		 * available).
+		 *
+		 * @param scope
+		 * @param sBind
+		 *
+		 * @returns {*}
+		 */
+		'user': function (scope, sBind) {
+
+			var scopeBinding = sBind || 'user',
+
+			    data = localStorage.getItem('SP_REST_USER'),
+
+			    cacheDays = _config.user.cache * CONST.JS_DAY;
+
+
+			if (data && initStamp - data.updated < cacheDays) {
+
+				data = JSON.parse(data);
+
+				scope[scopeBinding] = data;
+
+			} else {
+
+				return $http(
+					{
+						'method': 'GET',
+						'cache' : true,
+						'url'   : _config.user.url
+					})
+
+					.then(function (response) {
+
+						      var data, html;
+
+						      data = {
+							      'id'     : parseInt(response.data.match(/_spuserid=(\d+);/i)[1], 10),
+							      'updated': new Date().getTime()
+						      };
+
+						      html = $(response.data.replace(/[ ]src=/g, ' data-src='));
+
+						      html.find('#SPFieldText')
+							      .each(function () {
+
+								            var field1, field2;
+
+								            field1 = this.innerHTML.match(/FieldName\=\"(.*)\"/i)[1];
+								            field2 = this.innerHTML.match(/FieldInternalName\=\"(.*)\"/i)[1];
+
+								            data[field1] = data[field2] = this.innerText.trim();
+
+							            });
+
+						      localStorage.SP_REST_USER = JSON.stringify(data);
+
+						      scope[scopeBinding] = data;
+
+					      });
+
+			}
 
 		},
 
@@ -266,7 +279,7 @@ function main($http, SP_CONFIG) {
 		 *
 		 * Performs a CREATE with the given scope variable, The scope
 		 *
-		 * @param scope
+		 * @param {Object} scope
 		 * @returns {*}
 		 */
 		'create': function (scope) {
@@ -321,10 +334,8 @@ function main($http, SP_CONFIG) {
 				// Join the params list if it is an array
 				_(opt.params).each(function (param, key) {
 
-					// Allows array params that we flatten to a string
-					if (param instanceof Array) {
-						opt.params[key] = param.join(',');
-					}
+					// Does nothing for Strings but for Arrays is equivalent to [].join(',')
+					opt.params[key] = param.toString();
 
 					// If this is a $select field and Id isn't specified, we'll need to add it for caching
 					if (key === '$select' && param.indexOf('Id') < 0) {
@@ -555,4 +566,5 @@ function main($http, SP_CONFIG) {
 
 	}
 
-};
+}
+;

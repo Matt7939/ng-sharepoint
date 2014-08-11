@@ -2,6 +2,7 @@
 
 
 _utils = {
+
 	/**
 	 * Generate a timestamp offset from 1 Jan 2014 (EPOCH was too large and causing SP to throw a 500 error) :-/
 	 *

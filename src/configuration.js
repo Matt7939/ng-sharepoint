@@ -3,6 +3,9 @@ function configuration(SP_CONFIG) {
 	// Constants for the service
 	CONST = {
 
+		// MS in a day,
+		'JS_DAY'          : 86400000,
+
 		// For caching, this is the initial timing offset (1 Jan 2014).  SP gives intermitten 500 errors if you use EPOCH
 		'EPOCH_OFFSET'    : 1388552400,
 
@@ -20,13 +23,32 @@ function configuration(SP_CONFIG) {
 
 			{
 				// The URL for ListData.svc, default: /_vti_bin/ListData.svc
-				'baseURL'     : '/_vti_bin/ListData.svc/',
+				'baseURL': '/_vti_bin/ListData.svc/',
 
-				// The URL for loading user data, default: /_layouts/userdisp.aspx?Force=True
-				'userURL'     : '/_layouts/userdisp.aspx?Force=True',
+				'peopleLookup': {
 
-				// The URL for loading SP users, default: /_vti_bin/ListData.svc/UserInformationList
-				'pplURL'      : '/_vti_bin/ListData.svc/UserInformationList',
+					// The URL for loading SP users, default: /_vti_bin/ListData.svc/UserInformationList
+					'url': '/_vti_bin/ListData.svc/UserInformationList',
+
+					'fields': 'Name,WorkEMail',
+
+					'searchField': 'WorkEMail',
+
+					'limit': 10,
+
+					'cache': true
+
+				},
+
+				'user'        : {
+
+					// The URL for loading user data, default: /_layouts/userdisp.aspx?Force=True
+					'url'  : '/_layouts/userdisp.aspx?Force=True',
+
+					// The number of days to cache the data for
+					'cache': 30
+
+				},
 
 				// Enable offline mode, doesn't check for changes if data is already cached
 				'offline'     : false,
