@@ -47,6 +47,7 @@ angular
 
 
 _utils = {
+
 	/**
 	 * Generate a timestamp offset from 1 Jan 2014 (EPOCH was too large and causing SP to throw a 500 error) :-/
 	 *
@@ -122,6 +123,38 @@ _utils = {
 		// Remove all the junk from our JSON string of the model
 		return JSON.stringify(options).replace(/[^\w]/gi, '') + _config.cacheVersion
 
+	},
+
+	'xmlToJSON': function (xml, tag) {
+
+		var data = [];
+
+		xml = angular.element(xml).find(tag);
+
+		xml.each(function(key, element) {
+
+			var row = {};
+
+			_(element.attributes).each(function (prop) {
+				row[prop.name] = prop.value;
+			});
+
+			if (xml.length > 1) {
+
+				data.push(row);
+
+			} else {
+
+				data = row;
+
+			}
+
+		});
+
+
+
+		return data;
+
 	}
 
 };
@@ -175,6 +208,9 @@ function cache() {
 	// Constants for the service
 	CONST = {
 
+		// MS in a day,
+		'JS_DAY'          : 86400000,
+
 		// For caching, this is the initial timing offset (1 Jan 2014).  SP gives intermitten 500 errors if you use EPOCH
 		'EPOCH_OFFSET'    : 1388552400,
 
@@ -182,7 +218,16 @@ function cache() {
 		'FIELD_JSON_TRAIL': '_JSON',
 
 		// For SP 2010 use 2.0 for 2013 it's 3.0.  This was added due to random 500 errors from a SP farm when this header wasn't sent (this is NOT required by the oData Spec)!
-		'ODATA_VERSION'   : '2.0'
+		'ODATA_VERSION'   : '2.0',
+
+		'SOAP': {
+
+			'userinfo': '<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><GetCurrentUserInfo xmlns="http://schemas.microsoft.com/sharepoint/soap/directory/" /></soap12:Body></soap12:Envelope>',
+
+			'groups': '<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><GetGroupCollectionFromUser xmlns="http://schemas.microsoft.com/sharepoint/soap/directory/"><userLoginName>_USER_</userLoginName></GetGroupCollectionFromUser></soap12:Body></soap12:Envelope>'
+
+		}
+
 
 	};
 
@@ -192,13 +237,32 @@ function cache() {
 
 			{
 				// The URL for ListData.svc, default: /_vti_bin/ListData.svc
-				'baseURL'     : '/_vti_bin/ListData.svc/',
+				'baseURL': '/_vti_bin/ListData.svc/',
 
-				// The URL for loading user data, default: /_layouts/userdisp.aspx?Force=True
-				'userURL'     : '/_layouts/userdisp.aspx?Force=True',
+				'people': {
 
-				// The URL for loading SP users, default: /_vti_bin/ListData.svc/UserInformationList
-				'pplURL'      : '/_vti_bin/ListData.svc/UserInformationList',
+					// The URL for loading SP users, default: /_vti_bin/ListData.svc/UserInformationList
+					'url': '/_vti_bin/ListData.svc/UserInformationList',
+
+					'fields': 'Name,WorkEMail',
+
+					'searchField': 'WorkEMail',
+
+					'limit': 10,
+
+					'cache': true
+
+				},
+
+				'user'        : {
+
+					// The URL for loading user data, default: /_vti_bin/UserGroup.asmx
+					'url'  : '/_vti_bin/UserGroup.asmx',
+
+					// Determines whether user groups are loaded when user data is requested or not
+					'groups': true
+
+				},
 
 				// Enable offline mode, doesn't check for changes if data is already cached
 				'offline'     : false,
@@ -213,127 +277,135 @@ function cache() {
 }
 ;function main($http, SP_CONFIG) {
 
+	// This is the cache of our people queries
+	var _cachePeople = {},
+
+	    // The initial timestamp
+	    initStamp = new Date().getTime();
+
 	return {
 
 		/**
+		 * UserInformationList lookup
 		 *
+		 * This function performs a people lookup function that includes result caching and a filtering function.
+		 *
+		 * @param {String} search - The terms to query SharePoint by (using startswith function).
+		 * @param {Function} [filter] - An optional filter function to apply to the result set.
+		 *
+		 * @returns {Array} The array of filtered people found.
 		 */
-		'people': (function () {
+		'people': function (search, filter) {
 
-			// This is the cache of our people queries
-			var _cachePeople = {};
+			// Call the filter independently because it may be change while the SP data shouldn't
+			var execFilter = function (data) {
 
-			return function (search, filter) {
+				return filter ? _.filter(data, function (d) {
 
-				// Call the filter independently because it may be change while the SP data shouldn't
-				var execFilter = function (data) {
+					return filter(d);
 
-					return filter ? _.filter(data, function (d) {
+				}) : data;
 
-						return filter(d);
+			};
 
-					}) : data;
+			// If we've already done this search during the app's lifecycle, return it instead
+			if (_config.people.cache && _cachePeople[search]) {
 
+				return {
+					'then': function (callback) {
+						callback(execFilter(_cachePeople[search]));
+					}
 				};
 
-				// If we've already done this search during the app's lifecycle, return it instead
-				if (_cachePeople[search]) {
+			}
 
-					return {
-						'then': function (callback) {
-							callback(execFilter(_cachePeople[search]));
-						}
-					};
+			// No cache existed so make the SP query
+			return $http(
+				{
+					'dataType': 'json',
+					'method'  : 'GET',
+					'cache'   : _config.people.cache,
+					'url'     : _config.people.url,
+					'params'  : {
+						'$select': _config.people.fields.toString(),
+						'$filter': "startswith(" + _config.people.searchField + ",'" + search + "')",
+						'$top'   : _config.people.limit
+					}
+				})
 
-				}
+				// Now convert to an array, store a copy in the cache and return results of execFilter()
+				.then(function (response) {
 
-				// No cache existed so make the SP query
-				return $http(
-					{
-						'dataType': 'json',
-						'method'  : 'GET',
-						'cache'   : true,
-						'url'     : _config.pplURL,
-						'params'  : {
-							'$select': 'Name,WorkEMail',
-							'$filter': "startswith(WorkEMail,'" + search + "')",
-							'$top'   : 10
-						}
-					})
+					      var data = _cachePeople[search] = _.toArray(response.data.d);
+					      return execFilter(data);
 
-					// Now convert to an array, store a copy in the cache and return results of execFilter()
+				      });
+
+		},
+
+		/**
+		 * Load user data and group membership
+		 *
+		 * Generates a SOAP request for the user data information including the groups the member is a part of if enabled
+		 *
+		 *
+		 * @param scope
+		 * @param sBind
+		 *
+		 * @returns {*}
+		 */
+		'user': (function () {
+
+			var user;
+
+			// We will keep this data persistent throughout the session to prevent excess page loads
+			return function (scope, sBind) {
+
+				var bind = function () {
+
+					    scope[sBind || 'user'] = user;
+
+				    },
+
+				    params = {
+					    'method' : 'POST',
+					    'url'    : _config.user.url,
+					    'headers': {
+						    'Content-Type': 'application/soap+xml; charset=utf-8'
+					    },
+					    data     : CONST.SOAP.userinfo
+				    };
+
+				return user || $http(params)
+
 					.then(function (response) {
 
-						      var data = _cachePeople[search] = _.toArray(response.data.d);
-						      return execFilter(data);
+						      user = _utils.xmlToJSON(response.data, 'user');
+
+						      params.data = CONST.SOAP.groups.replace('_USER_', user.loginname);
+
+						      bind();
+
+						      return $http(params).then(function (response) {
+
+							      user.groups = _utils.xmlToJSON(response.data, 'group');
+
+						      });
 
 					      });
 
 			};
 
 		}()),
-		'user'  : function (scope, sField) {
 
-			var scopeField = sField || 'user';
-
-			try {
-
-				var data = localStorage.getItem('SP_REST_USER');
-
-				if (data) {
-
-					data = JSON.parse(data);
-
-					if (new Date().getTime() - data.updated < 2592000000) {
-
-						scope[scopeField] = data;
-						return;
-
-					}
-
-				}
-
-			} catch (e) {
-			}
-
-			return $http(
-				{
-					'method': 'GET',
-					'cache' : true,
-					'url'   : _config.userURL
-				})
-
-				.then(function (response) {
-
-					      var data, html;
-
-					      data = {
-						      'id'     : parseInt(response.data.match(/_spuserid=(\d+);/i)[1], 10),
-						      'updated': new Date().getTime()
-					      };
-
-					      html = $(response.data.replace(/[ ]src=/g, ' data-src='));
-
-					      html.find('#SPFieldText')
-						      .each(function () {
-
-							            var field1, field2;
-
-							            field1 = this.innerHTML.match(/FieldName\=\"(.*)\"/i)[1];
-							            field2 = this.innerHTML.match(/FieldInternalName\=\"(.*)\"/i)[1];
-
-							            data[field1] = data[field2] = this.innerText.trim();
-
-						            });
-
-					      localStorage.SP_REST_USER = JSON.stringify(data);
-
-					      scope[scopeField] = data;
-
-				      });
-
-		},
-
+		/**
+		 * Execute SQL transaction
+		 *
+		 * Perform chained sequence of operations
+		 *
+		 * @param collection
+		 * @returns {*}
+		 */
 		'batch': function (collection) {
 
 			var map = [],
@@ -475,11 +547,11 @@ function cache() {
 		},
 
 		/**
-		 * Create action
+		 * Create data
 		 *
 		 * Performs a CREATE with the given scope variable, The scope
 		 *
-		 * @param scope
+		 * @param {Object} scope
 		 * @returns {*}
 		 */
 		'create': function (scope) {
@@ -487,15 +559,21 @@ function cache() {
 			return $http(
 				{
 					'method' : 'POST',
-					'url'    : _config.baseURL + scope.__metadata,
-					'data'   : _utils.beforeSend(scope),
+					'url'    : _config.baseURL + (scope.__metadata.uri || scope.__metadata),
 					'headers': {
 						'DataServiceVersion': CONST.ODATA_VERSION
-					}
+					},
+					'data'   : _utils.beforeSend(scope)
 				});
 
 		},
 
+		/**
+		 * Updated data
+		 *
+		 * @param scope
+		 * @returns {*}
+		 */
 		'update': function (scope) {
 
 			return $http(
@@ -512,6 +590,12 @@ function cache() {
 
 		},
 
+		/**
+		 * Read Data
+		 *
+		 * @param optOriginal
+		 * @returns {*|Promise}
+		 */
 		'read': function (optOriginal) {
 
 			var getData, getCache, options;
@@ -534,10 +618,8 @@ function cache() {
 				// Join the params list if it is an array
 				_(opt.params).each(function (param, key) {
 
-					// Allows array params that we flatten to a string
-					if (param instanceof Array) {
-						opt.params[key] = param.join(',');
-					}
+					// Does nothing for Strings but for Arrays is equivalent to [].join(',')
+					opt.params[key] = param.toString();
 
 					// If this is a $select field and Id isn't specified, we'll need to add it for caching
 					if (key === '$select' && param.indexOf('Id') < 0) {
@@ -551,10 +633,10 @@ function cache() {
 						'dataType': 'json',
 						'method'  : 'GET',
 						'url'     : _config.baseURL + opt.source,
-						'params'  : opt.params || null,
 						'headers' : {
 							'DataServiceVersion': CONST.ODATA_VERSION
-						}
+						},
+						'params'  : opt.params || null
 					})
 
 					.then(function (response) {
@@ -768,8 +850,8 @@ function cache() {
 
 	}
 
-};
-
+}
+;
 //# sourceMappingURL=out.js.map
 
 }(window, window.angular));

@@ -32,7 +32,7 @@ function main($http, SP_CONFIG) {
 			};
 
 			// If we've already done this search during the app's lifecycle, return it instead
-			if (_config.peopleLookup.cache && _cachePeople[search]) {
+			if (_config.people.cache && _cachePeople[search]) {
 
 				return {
 					'then': function (callback) {
@@ -47,12 +47,12 @@ function main($http, SP_CONFIG) {
 				{
 					'dataType': 'json',
 					'method'  : 'GET',
-					'cache'   : _config.peopleLookup.cache,
-					'url'     : _config.pplURL,
+					'cache'   : _config.people.cache,
+					'url'     : _config.people.url,
 					'params'  : {
-						'$select': _config.peopleLookup.fields.toString(),
-						'$filter': "startswith(" + _config.peopleLookup.searchField + ",'" + search + "')",
-						'$top'   : _config.peopleLookup.limit
+						'$select': _config.people.fields.toString(),
+						'$filter': "startswith(" + _config.people.searchField + ",'" + search + "')",
+						'$top'   : _config.people.limit
 					}
 				})
 
@@ -67,70 +67,59 @@ function main($http, SP_CONFIG) {
 		},
 
 		/**
-		 * Current user data parser
+		 * Load user data and group membership
 		 *
-		 * Performs a page-scrape to find relevant user data (this is required for SP 2010 as the _api features aren't
-		 * available).
+		 * Generates a SOAP request for the user data information including the groups the member is a part of if enabled
 		 *
-		 * @todo This needs a lot more testing to verify the viability of the page-scrape across multiple platforms
 		 *
 		 * @param scope
 		 * @param sBind
 		 *
 		 * @returns {*}
 		 */
-		'user': function (scope, sBind) {
+		'user': (function () {
 
-			var scopeBinding = sBind || 'user',
+			var user;
 
-			    data = localStorage.getItem('NG_SHAREPOINT_REST_USER_DATA'),
+			// We will keep this data persistent throughout the session to prevent excess page loads
+			return function (scope, sBind) {
 
-			    cacheDays = _config.user.cache * CONST.JS_DAY;
+				var bind = function () {
 
-			if (data && initStamp - data.updated < cacheDays) {
+					    scope[sBind || 'user'] = user;
 
-				scope[scopeBinding] = JSON.parse(data);
+				    },
 
-			} else {
+				    params = {
+					    'method' : 'POST',
+					    'url'    : _config.user.url,
+					    'headers': {
+						    'Content-Type': 'application/soap+xml; charset=utf-8'
+					    },
+					    data     : CONST.SOAP.userinfo
+				    };
 
-				return $http(
-					{
-						'method': 'GET',
-						'cache' : true,
-						'url'   : _config.user.url
-					})
+				return user || $http(params)
 
 					.then(function (response) {
 
-						      data = {
-							      'id'     : parseInt(response.data.match(/_spuserid=(\d+);/i)[1], 10),
-							      'updated': initStamp
-						      };
+						      user = _utils.xmlToJSON(response.data, 'user');
 
-						      $(response.data.replace(/[ ]src=/g, ' data-src='))
+						      params.data = CONST.SOAP.groups.replace('_USER_', user.loginname);
 
-							      .find('#SPFieldText')
+						      bind();
 
-							      .each(function () {
+						      return $http(params).then(function (response) {
 
-								            var field1, field2;
+							      user.groups = _utils.xmlToJSON(response.data, 'group');
 
-								            field1 = this.innerHTML.match(/FieldName\=\"(.*)\"/i)[1];
-								            field2 = this.innerHTML.match(/FieldInternalName\=\"(.*)\"/i)[1];
-
-								            data[field1] = data[field2] = this.innerText.trim();
-
-							            });
-
-						      localStorage.NG_SHAREPOINT_REST_USER_DATA = JSON.stringify(data);
-
-						      scope[scopeBinding] = data;
+						      });
 
 					      });
 
-			}
+			};
 
-		},
+		}()),
 
 		/**
 		 * Execute SQL transaction

@@ -34,7 +34,7 @@ function configuration(SP_CONFIG) {
 				// The URL for ListData.svc, default: /_vti_bin/ListData.svc
 				'baseURL': '/_vti_bin/ListData.svc/',
 
-				'peopleLookup': {
+				'people': {
 
 					// The URL for loading SP users, default: /_vti_bin/ListData.svc/UserInformationList
 					'url': '/_vti_bin/ListData.svc/UserInformationList',
@@ -51,11 +51,11 @@ function configuration(SP_CONFIG) {
 
 				'user'        : {
 
-					// The URL for loading user data, default: /_layouts/userdisp.aspx?Force=True
-					'url'  : '/_layouts/userdisp.aspx?Force=True',
+					// The URL for loading user data, default: /_vti_bin/UserGroup.asmx
+					'url'  : '/_vti_bin/UserGroup.asmx',
 
-					// The number of days to cache the data for
-					'cache': 30
+					// Determines whether user groups are loaded when user data is requested or not
+					'groups': true
 
 				},
 

@@ -78,6 +78,38 @@ _utils = {
 		// Remove all the junk from our JSON string of the model
 		return JSON.stringify(options).replace(/[^\w]/gi, '') + _config.cacheVersion
 
+	},
+
+	'xmlToJSON': function (xml, tag) {
+
+		var data = [];
+
+		xml = angular.element(xml).find(tag);
+
+		xml.each(function(key, element) {
+
+			var row = {};
+
+			_(element.attributes).each(function (prop) {
+				row[prop.name] = prop.value;
+			});
+
+			if (xml.length > 1) {
+
+				data.push(row);
+
+			} else {
+
+				data = row;
+
+			}
+
+		});
+
+
+
+		return data;
+
 	}
 
 };
